@@ -1,12 +1,13 @@
 #ifndef FLIP_H
 #define FLIP_H
 #include "Simulator.h"
+#include<unordered_map>
 
 class FlipSimulator :public Simulator {
 public:
 	// Construtors
 	FlipSimulator() {
-		setupScene(15);
+		setupScene(13);
 	}
 
 	// UI Attributes
@@ -25,6 +26,13 @@ public:
 	float m_h; 			 // grid spacing, m_h = 1.0 / (m_iCellX-1)
 	float m_fInvSpacing; // grid inverse spacing, m_fInvSpacing = 1.0/m_h
 	int m_iNumCells;	 // m_iCellX * m_iCellY * m_iCellZ
+
+	// for collision
+	float m_pInvSpacing;
+	int m_pNumX;
+	int m_pNumY;
+	int m_pNumZ;
+	int m_pNumCells;
 
 	// particle property
 	int m_iNumSpheres;
@@ -60,7 +68,61 @@ public:
 		}
 		return;
 	}
+	float l2_norm(Vec3 x) {
+		return sqrt(x[0] * x[0] + x[1] * x[1] + x[2] * x[2]);
+	}
+
 	void pushParticlesApart(int numIters) {
+		static int cnt;
+		static vector<int>dummys[200005];
+		static unordered_map<int, vector<int> > M; 
+		int n = m_pNumY * m_pNumZ, m = m_pNumZ;
+
+		for (int it = 0; it < numIters; it++) {
+			M.clear(); cnt = 0;
+			//cout << "F@Q" << endl;
+			for (int i = 0; i < m_iNumSpheres; i++) {
+				nVec3i pi = clamp_i(m_particlePos[i] * m_pInvSpacing, 0, nVec3i(m_pNumX - 1, m_pNumY - 1, m_pNumZ - 1));
+				//cout << pi << endl;
+				int cellIdx = pi[0] * n + pi[1] * m + pi[2];
+				if (M.find(cellIdx) == M.end()) {
+					dummys[cnt].clear(); dummys[cnt].push_back(i);
+					M[cellIdx] = dummys[cnt]; cnt++;
+					//cout << cnt << endl;
+				}
+				else {
+					M[cellIdx].push_back(i);
+				}
+			}
+			for (int i = 0; i < m_iNumSpheres; i++) {
+				nVec3i pi = clamp_i(m_particlePos[i] * m_pInvSpacing, 0, nVec3i(m_pNumX - 1, m_pNumY - 1, m_pNumZ - 1));
+				for (int a = -1; a <= 1; a++) {
+					for (int b = -1; b <= 1; b++) {
+						for (int c = -1; c <= 1; c++) {
+							int x = pi[0] + a, y = pi[1] + b, z = pi[2] + c;
+							if (x < 0 || x >= m_pNumX || y < 0 || y >= m_pNumY || z < 0 || z >= m_pNumZ) continue;
+							
+							int cellIdx = x * n + y * m + z;
+							if (M.find(cellIdx) == M.end()) continue;
+
+							vector<int>idx = M[cellIdx];
+							for (int j = 0; j < idx.size(); j++) {
+								if (idx[j] == i) continue;
+								Vec3 nodePos = m_particlePos[idx[j]];
+								//cout << idx[j] << endl;
+								Vec3 d = m_particlePos[i] - nodePos;
+								float d_norm = l2_norm(d);
+								if (d_norm < 2 * m_particleRadius) {
+									Vec3 s = 0.5f * (2 * m_particleRadius - d_norm) * d / d_norm;
+									m_particlePos[i] += s;
+									m_particlePos[idx[j]] -= s;
+								}
+							}
+						}
+					}
+				}
+			}
+		}
 		return;
 	}
 	void handleParticleCollisions(Vec3 obstaclePos, float obstacleRadius, Vec3 obstacleVel) {
@@ -447,6 +509,11 @@ public:
 		m_fInvSpacing = float(res);
 		m_iNumCells = m_iCellX * m_iCellY * m_iCellZ;
 		m_particleRadius = 1.0 * point_r;
+		m_pInvSpacing = 1.0 / (2.2 * m_particleRadius);
+		m_pNumX = floor(tankWidth * m_pInvSpacing) + 1;
+		m_pNumY = floor(tankHeight * m_pInvSpacing) + 1;
+		m_pNumZ = floor(tankDepth * m_pInvSpacing) + 1;
+		m_pNumCells = m_pNumX * m_pNumY * m_pNumZ;
 
 		// update particle array
 		m_particlePos.clear(); m_particlePos.resize(m_iNumSpheres, Vec3(0.0f));
