@@ -16,7 +16,7 @@ public:
 	Point2D m_oldtrackmouse;
 	float m_fForceScaling;
 	// FLIP/PIC ratio
-	float m_fRatio;
+	float m_fRatio = 0.95f;
 
 	// grid property
 	int m_iCellX;
@@ -105,7 +105,6 @@ public:
 
 	void transferVelocities(bool toGrid, float flipRatio) {
 		static float eps = 1e-8;
-		flipRatio = 0.0f; // 现在flipRatio不为0的情况下会炸
 
 		int n = m_iCellY * m_iCellZ;
 		int m = m_iCellZ;
@@ -200,8 +199,8 @@ public:
 						for (int k = 0; k < 8; k++) {
 							picV += valid[k] * cubeWeight[k] * m_vel[cubeIdx[k]] * d / weightSum;
 							corr += valid[k] * cubeWeight[k] * (m_vel[cubeIdx[k]] - m_pre_vel[cubeIdx[k]]) * d / weightSum;
-							if (j == 0) {
-								//cout << "m_vel[cubeIdx[k]] = " << m_vel[cubeIdx[k]] << ", m_pre_vel[cubeIdx[k] = " << m_pre_vel[cubeIdx[k]] << endl;
+							if (j == 10) {
+								//cout << "m_vel[cubeIdx[k]] = " << m_vel[cubeIdx[k]] << ", m_pre_vel[cubeIdx[k] = " << m_pre_vel[cubeIdx[k]] << ", corr = " << corr << endl;
 							}
 						}
 						Vec3 flipV = v + corr;
@@ -388,7 +387,7 @@ public:
 	void simulateTimestep(float dt) {
 		int numSubSteps = 1;
 		int numParticleIters = 2;
-		int numPressureIters = 300;
+		int numPressureIters = 50;
 		bool separateParticles = true;
 		float overRelaxation = 1.9;
 		bool compensateDrift = true;
