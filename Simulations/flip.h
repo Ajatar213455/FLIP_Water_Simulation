@@ -6,7 +6,7 @@ class FlipSimulator :public Simulator {
 public:
 	// Construtors
 	FlipSimulator() {
-		setupScene(20);
+		setupScene(15);
 	}
 
 	// UI Attributes
@@ -52,6 +52,9 @@ public:
 	void integrateParticles(float timeStep) {
 		static Vec3 gravity = Vec3(0.0f, -9.81f, 0.0f);
 		for (int i = 0; i < m_iNumSpheres; i++) {
+			if (i == 0) {
+				//cout << "i=0, vel = " << m_particleVel[i] << endl;
+			}
 			m_particleVel[i] += gravity * timeStep;
 			m_particlePos[i] += m_particleVel[i] * timeStep;
 		}
@@ -102,6 +105,7 @@ public:
 
 	void transferVelocities(bool toGrid, float flipRatio) {
 		static float eps = 1e-8;
+		flipRatio = 0.0f; // 现在flipRatio不为0的情况下会炸
 
 		int n = m_iCellY * m_iCellZ;
 		int m = m_iCellZ;
@@ -113,12 +117,14 @@ public:
 				m_sum_weight[i] = Vec3(0.0f, 0.0f, 0.0f);
 				m_type[i] = fabs(m_s[i]) < eps ? SOLID_CELL : EMPTY_CELL;
 			}
+			//cout << "m_type[121] = " << m_type[121] << endl;
 			for (int i = 0; i < m_iNumSpheres; i++) {
 				Vec3 spherePos = m_particlePos[i];
 				nVec3i cellPos = clamp_i(spherePos * m_fInvSpacing, 0, nVec3i(m_iCellX - 1, m_iCellY - 1, m_iCellZ - 1));
 				int cellIdx = cellPos[0] * n + cellPos[1] * m + cellPos[2];
 				m_type[cellIdx] = m_type[cellIdx] == EMPTY_CELL ? FLUID_CELL : m_type[cellIdx];
 			}
+			//cout << "m_type[121] = " << m_type[121] << endl;
 		}
 
 		static vector<Vec3>dUnitComp; dUnitComp.clear();
@@ -158,7 +164,7 @@ public:
 
 					Vec3 currWeight = Vec3();
 					for (int l = 0; l < 3; l++)
-						currWeight[l] = cubeOffsets[k][l] ? baseWeight[l] : 1.0f - baseWeight[l];
+						currWeight[l] = cubeOffsets[k][l] ? 1.0f - baseWeight[l] : baseWeight[l];
 					cubeWeight.push_back(currWeight[0] * currWeight[1] * currWeight[2]);
 				}
 
@@ -175,22 +181,34 @@ public:
 					if (i == 0) offset = n;
 					if (i == 1) offset = m;
 					if (i == 2) offset = 1;
-					vector<float>valid; valid.resize(8, 0.0f);
+					vector<float>valid; valid.clear();
 					
 					for (int k = 0; k < 8; k++) {
 						valid.push_back(m_type[cubeIdx[k]] != EMPTY_CELL || m_type[cubeIdx[k] - offset] != EMPTY_CELL ? 1.0 : 0.0);
 						weightSum += valid[k] * cubeWeight[k];
+						if (j == 0) {
+							//cout << "k = " << k << ", valid = " << valid[k] << ", cubeWeight[k] = " << cubeWeight[k] << ", cubeIdx[k] = " << cubeIdx[k] << ", tp = " <<  m_type[cubeIdx[k]] << endl;
+						}
 					}
 					Vec3 v = m_particleVel[j] * d;
+					if (j == 0) {
+						//cout << "j=0, weightsum = " << weightSum << endl;
+					}
 					if (weightSum > eps) {
 						Vec3 picV = Vec3(0.0f, 0.0f, 0.0f);
 						Vec3 corr = Vec3(0.0f, 0.0f, 0.0f);
 						for (int k = 0; k < 8; k++) {
 							picV += valid[k] * cubeWeight[k] * m_vel[cubeIdx[k]] * d / weightSum;
 							corr += valid[k] * cubeWeight[k] * (m_vel[cubeIdx[k]] - m_pre_vel[cubeIdx[k]]) * d / weightSum;
+							if (j == 0) {
+								//cout << "m_vel[cubeIdx[k]] = " << m_vel[cubeIdx[k]] << ", m_pre_vel[cubeIdx[k] = " << m_pre_vel[cubeIdx[k]] << endl;
+							}
 						}
 						Vec3 flipV = v + corr;
 						m_particleVel[j][i] = (1.0 - flipRatio) * picV[i] + flipRatio * flipV[i];
+						if (j == 0) {
+							//cout << "j=0, vel = " << m_particleVel[j] << endl;
+						}
 					}
 				}
 			}
@@ -250,7 +268,8 @@ public:
 						float s = s_front + s_back + s_top + s_bottom + s_left + s_right;
 						if (s == 0.0f) continue;
 
-						float div = m_vel[right][0] - m_vel[center][0] + m_vel[top][1] - m_vel[center][1] + m_vel[back][2] - m_vel[center][2];
+						float div;
+						div = m_vel[right][0] - m_vel[center][0] + m_vel[top][1] - m_vel[center][1] + m_vel[back][2] - m_vel[center][2];
 
 						if (m_particleRestDensity > 0.0 && compensateDrift) {
 							float k = 1.0f;
@@ -259,13 +278,35 @@ public:
 						}
 
 						float p = (-div / s) * overRelaxation;
+						//cout << p << endl;
 						m_p[center] += cp * p;
 
+						if (i == 1 && j == 1 && k == 1 && FALSE) {
+							cout << "=============" << endl;
+							cout << "div = " << div << endl;
+							cout << "s = " << s << endl;
+							cout << "p = " << p << endl;
+							cout << "s_front = " << s_front << endl;
+							cout << "s_back = " << s_back << endl;
+							cout << "s_top = " << s_top << endl;
+							cout << "s_bottom = " << s_bottom << endl;
+							cout << "s_left = " << s_left << endl;
+							cout << "s_right = " << s_right << endl;
+
+							cout << "m_vel[right][0] = " << m_vel[right][0] << endl;
+							cout << "m_vel[top][1] = " << m_vel[top][1] << endl;
+							cout << "m_vel[back][2] = " << m_vel[back][2] << endl;
+							cout << "m_vel[left][0] = " << m_vel[left][0] << endl;
+							cout << "m_vel[bottom][1] = " << m_vel[bottom][1] << endl;
+							cout << "m_vel[front][2] = " << m_vel[front][2] << endl;
+							cout << "m_vel[center] = " << m_vel[center] << endl;
+						}
+
 						m_vel[center][0] -= s_left * p;
-						m_vel[right][0] += s_right * p;
 						m_vel[center][1] -= s_bottom * p;
-						m_vel[top][1] += s_top * p;
 						m_vel[center][2] -= s_front * p;
+						m_vel[right][0] += s_right * p;
+						m_vel[top][1] += s_top * p;
 						m_vel[back][2] += s_back * p;
 					}
 				}
@@ -301,7 +342,7 @@ public:
 		m_oldtrackmouse.x = m_oldtrackmouse.y = 0;
 	}
 	void drawFrame(ID3D11DeviceContext* pd3dImmediateContext) {
-		float m_fSphereSize = m_particleRadius;
+		float m_fSphereSize = m_particleRadius * 0.4;
 		Vec3 pointCol = Vec3(0, 0, 0.6);
 		DUC->setUpLighting(Vec3(), 0.4 * Vec3(1, 1, 1), 100, pointCol);
 		for (int i = 0; i < m_particlePos.size(); i++)
@@ -347,7 +388,7 @@ public:
 	void simulateTimestep(float dt) {
 		int numSubSteps = 1;
 		int numParticleIters = 2;
-		int numPressureIters = 30;
+		int numPressureIters = 300;
 		bool separateParticles = true;
 		float overRelaxation = 1.9;
 		bool compensateDrift = true;
@@ -398,13 +439,15 @@ public:
 
 		// update object member attributes
 		m_iNumSpheres = numX * numY * numZ;
+		cout << "m_iNumSpheres = " << m_iNumSpheres << endl;
+
 		m_iCellX = res + 1;
 		m_iCellY = res + 1;
 		m_iCellZ = res + 1;
 		m_h = 1.0 / float(res);
 		m_fInvSpacing = float(res);
 		m_iNumCells = m_iCellX * m_iCellY * m_iCellZ;
-		m_particleRadius = 0.3 * point_r;
+		m_particleRadius = 1.0 * point_r;
 
 		// update particle array
 		m_particlePos.clear(); m_particlePos.resize(m_iNumSpheres, Vec3(0.0f));
@@ -441,8 +484,10 @@ public:
 			for (int j = 0; j < m_iCellY; j++) {
 				for (int k = 0; k < m_iCellZ; k++) {
 					float s = 1.0;	// fluid
-					if (i == 0 || i == m_iCellX - 1 || j == 0 || k == 0 || k == m_iCellZ - 1)
+					if (i == 0 || i == m_iCellX - 1 || j == 0 || k == 0 || k == m_iCellZ - 1) {
 						s = 0.0f;	// solid
+						cout << "solid idx = " << i*n+j*m+k << endl;
+					}
 					m_s[i * n + j * m + k] = s;
 				}
 			}
