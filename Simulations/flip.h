@@ -7,7 +7,7 @@ class FlipSimulator :public Simulator {
 public:
 	// Construtors
 	FlipSimulator() {
-		setupScene(13);
+		setupScene(20);
 	}
 
 	// UI Attributes
@@ -73,27 +73,34 @@ public:
 	}
 
 	void pushParticlesApart(int numIters) {
-		static int cnt;
-		static vector<int>dummys[200005];
-		static unordered_map<int, vector<int> > M; 
+		//return;
+		static int cnt, clock;
+		static vector<int>idx[200005];
+		static int M[200005];
 		int n = m_pNumY * m_pNumZ, m = m_pNumZ;
 
+		clock++;
 		for (int it = 0; it < numIters; it++) {
-			M.clear(); cnt = 0;
+			cnt = 0;
 			//cout << "F@Q" << endl;
 			for (int i = 0; i < m_iNumSpheres; i++) {
 				nVec3i pi = clamp_i(m_particlePos[i] * m_pInvSpacing, 0, nVec3i(m_pNumX - 1, m_pNumY - 1, m_pNumZ - 1));
 				//cout << pi << endl;
 				int cellIdx = pi[0] * n + pi[1] * m + pi[2];
-				if (M.find(cellIdx) == M.end()) {
-					dummys[cnt].clear(); dummys[cnt].push_back(i);
-					M[cellIdx] = dummys[cnt]; cnt++;
+				if (cellIdx > 200000) {
+					cout << "1" << endl;
+				}
+				if (M[cellIdx] != clock) {
+					idx[cellIdx].clear();
+					idx[cellIdx].push_back(i);
+					M[cellIdx] = clock;
 					//cout << cnt << endl;
 				}
 				else {
-					M[cellIdx].push_back(i);
+					idx[cellIdx].push_back(i);
 				}
 			}
+			//cout << cnt << endl;
 			for (int i = 0; i < m_iNumSpheres; i++) {
 				nVec3i pi = clamp_i(m_particlePos[i] * m_pInvSpacing, 0, nVec3i(m_pNumX - 1, m_pNumY - 1, m_pNumZ - 1));
 				for (int a = -1; a <= 1; a++) {
@@ -103,19 +110,24 @@ public:
 							if (x < 0 || x >= m_pNumX || y < 0 || y >= m_pNumY || z < 0 || z >= m_pNumZ) continue;
 							
 							int cellIdx = x * n + y * m + z;
-							if (M.find(cellIdx) == M.end()) continue;
+							if (cellIdx > 200000) {
+								cout << "222" << endl;
+							}
+							if (M[cellIdx] != clock) continue;
 
-							vector<int>idx = M[cellIdx];
-							for (int j = 0; j < idx.size(); j++) {
-								if (idx[j] == i) continue;
-								Vec3 nodePos = m_particlePos[idx[j]];
+							for (int j = 0; j < idx[cellIdx].size(); j++) {
+								if (idx[cellIdx][j] == i) continue;
+								if (idx[cellIdx][j] > m_particlePos.size()) {
+									cout << "FQ" << endl;
+								}
+								Vec3 nodePos = m_particlePos[idx[cellIdx][j]];
 								//cout << idx[j] << endl;
 								Vec3 d = m_particlePos[i] - nodePos;
 								float d_norm = l2_norm(d);
 								if (d_norm < 2 * m_particleRadius) {
 									Vec3 s = 0.5f * (2 * m_particleRadius - d_norm) * d / d_norm;
 									m_particlePos[i] += s;
-									m_particlePos[idx[j]] -= s;
+									m_particlePos[idx[cellIdx][j]] -= s;
 								}
 							}
 						}
@@ -167,6 +179,7 @@ public:
 
 	void transferVelocities(bool toGrid, float flipRatio) {
 		static float eps = 1e-8;
+		if (m_iSysCase == 0) flipRatio = 0;
 
 		int n = m_iCellY * m_iCellZ;
 		int m = m_iCellZ;
@@ -179,14 +192,21 @@ public:
 				m_type[i] = fabs(m_s[i]) < eps ? SOLID_CELL : EMPTY_CELL;
 			}
 			//cout << "m_type[121] = " << m_type[121] << endl;
+			cout << "MID" << endl;
 			for (int i = 0; i < m_iNumSpheres; i++) {
 				Vec3 spherePos = m_particlePos[i];
 				nVec3i cellPos = clamp_i(spherePos * m_fInvSpacing, 0, nVec3i(m_iCellX - 1, m_iCellY - 1, m_iCellZ - 1));
 				int cellIdx = cellPos[0] * n + cellPos[1] * m + cellPos[2];
+				if ((cellIdx < m_type.size()) == FALSE) {
+					cout << "cellIdx = " << cellIdx << endl;
+					cout << "cellPos = " << cellPos << endl;
+
+				}
 				m_type[cellIdx] = m_type[cellIdx] == EMPTY_CELL ? FLUID_CELL : m_type[cellIdx];
 			}
 			//cout << "m_type[121] = " << m_type[121] << endl;
 		}
+		cout << "HERE" << endl;
 
 		static vector<Vec3>dUnitComp; dUnitComp.clear();
 		dUnitComp.push_back(Vec3(0.0f, 1.0f, 1.0f) * m_h / 2.0f);
@@ -213,7 +233,7 @@ public:
 			for (int j = 0; j < m_iNumSpheres; j++) {
 				Vec3 spherePos = clamp(m_particlePos[j], m_h, Vec3(m_iCellX - 1, m_iCellY - 1, m_iCellZ - 1) * m_h);
 
-				nVec3i baseVertex = clamp_i((spherePos - dc) * m_fInvSpacing, 0, nVec3i(m_iCellX - 2, m_iCellY - 2, m_iCellZ - 2));
+				nVec3i baseVertex = clamp_i((spherePos - dc) * m_fInvSpacing, 1, nVec3i(m_iCellX - 2, m_iCellY - 2, m_iCellZ - 2));
 				Vec3 baseWeight = ((spherePos - dc) - m_h * Vec3(baseVertex[0], baseVertex[1], baseVertex[2])) * m_fInvSpacing;
 
 				static vector<nVec3i>cubeVertex; cubeVertex.clear();
@@ -385,7 +405,7 @@ public:
 		return "Normal Test Case";
 	}
 	const char* getSysCasesStr() {
-		return "Normal Sys Case";
+		return "PIC, FLIP";
 	}
 	void initUI(DrawingUtilitiesClass* DUC) {
 		this->DUC = DUC;
@@ -426,7 +446,10 @@ public:
 		switch (m_iSysCase)
 		{
 			case 0:
-				cout << "Normal Sys Case!\n";
+				cout << "PIC\n";
+				break;
+			case 1:
+				cout << "FLIP95\n";
 				break;
 			default: break;
 		}
@@ -449,7 +472,7 @@ public:
 	void simulateTimestep(float dt) {
 		int numSubSteps = 1;
 		int numParticleIters = 2;
-		int numPressureIters = 50;
+		int numPressureIters = 20;
 		bool separateParticles = true;
 		float overRelaxation = 1.9;
 		bool compensateDrift = true;
@@ -461,14 +484,22 @@ public:
 		float sdt = dt / numSubSteps;
 
 		for (int step = 0; step < numSubSteps; step++) {
+			cout << 1 << endl;
 			integrateParticles(sdt);
+			cout << 2 << endl;
 			if (separateParticles)
 				pushParticlesApart(numParticleIters);
+			cout << 3 << endl;
 			handleParticleCollisions(obstaclePos, 0.0, obstacleVel);
+			cout << 4 << endl;
 			transferVelocities(true, flipRatio);
+			cout << 5 << endl;
 			updateParticleDensity();
+			cout << 6 << endl;
 			solveIncompressibility(numPressureIters, sdt, overRelaxation, compensateDrift);
+			cout << 7 << endl;
 			transferVelocities(false, flipRatio);
+			cout << 8 << endl;
 		}
 
 		updateParticleColors();
@@ -514,6 +545,7 @@ public:
 		m_pNumY = floor(tankHeight * m_pInvSpacing) + 1;
 		m_pNumZ = floor(tankDepth * m_pInvSpacing) + 1;
 		m_pNumCells = m_pNumX * m_pNumY * m_pNumZ;
+		cout << "m_pNumCells = " << m_pNumCells << endl;
 
 		// update particle array
 		m_particlePos.clear(); m_particlePos.resize(m_iNumSpheres, Vec3(0.0f));
